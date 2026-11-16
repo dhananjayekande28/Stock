@@ -1,184 +1,322 @@
 
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Trade Pro</title>
 <style>
 body{margin:0;background:#101827;color:white;font-family:Arial}
-header{background:#192b43;padding:20px;text-align:center}
+header{background:#192b43;padding:18px;text-align:center}
 h1{color:#00e5a0;margin:0}
-main{padding:14px}
-.panel{background:#1d3048;padding:15px;border-radius:12px;margin-bottom:15px}
-h2{color:#00e5a0;font-size:19px}
-button,select{padding:12px;border:0;border-radius:7px}
+main{padding:12px}
+.panel{background:#1d3048;padding:14px;border-radius:12px;margin-bottom:14px}
+h2{color:#00e5a0;font-size:18px}
+button,select{padding:11px;border:0;border-radius:7px;margin:4px}
 button{background:#00bd83;color:#001c15;font-weight:bold}
-#prices{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
-.stock{background:#263c56;padding:13px;border-radius:9px}
-.name{font-size:14px;color:#b9c9dc}
-.price{font-size:21px;font-weight:bold;margin:9px 0}
-.up{color:#00e5a0}
-.down{color:#ff7777}
+select{background:#304760;color:white}
+#prices{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px}
+.stock{background:#263c56;padding:12px;border-radius:9px}
+.name{font-size:13px;color:#b9c9dc}
+.price{font-size:20px;font-weight:bold;margin:8px 0}
 .small{font-size:12px;color:#b9c9dc}
-.error{color:#ff9999;font-size:12px}
-footer{text-align:center;padding:20px;color:#aaa}
+.up{color:#00e5a0}.down{color:#ff7777}
+.indicators{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.metric{background:#263c56;padding:12px;border-radius:8px}
+.metric b{display:block;font-size:19px;margin-top:7px}
+.signal{font-size:20px;font-weight:bold}
 </style>
 </head>
 <body>
-
 <header>
 <h1>AI TRADE PRO</h1>
-<p>NSE + BSE STOCK DASHBOARD</p>
+<p>NSE + BSE | Technical Analysis</p>
 </header>
-
 <main>
+
 <div class="panel">
 <h2>Market Prices</h2>
-<p class="small">Latest available Yahoo Finance quotes</p>
-<button onclick="loadPrices()">REFRESH PRICES</button>
-<p id="status" class="small">Loading prices...</p>
+<button onclick="loadPrices()">Refresh Prices</button>
+<div id="status" class="small">Loading...</div>
 <div id="prices"></div>
 </div>
 
 <div class="panel">
-<h2>Market Information</h2>
-<p>NSE: National Stock Exchange</p>
-<p>BSE: Bombay Stock Exchange</p>
-<p class="small">Prices may be delayed or unavailable.
-Not guaranteed to be exactly 15 minutes delayed.</p>
+<h2>Technical Analysis</h2>
+<label>Select Stock</label><br>
+<select id="stockSelect" onchange="loadAnalysis()"></select>
+<br>
+<label>Timeframe</label><br>
+<button onclick="setFrame('daily')">Daily</button>
+<button onclick="setFrame('weekly')">Weekly</button>
+<button onclick="setFrame('monthly')">Monthly</button>
+<div id="analysisStatus" class="small">Select stock and wait...</div>
+<div class="indicators">
+<div class="metric">RSI (14)<b id="rsi">--</b><span id="rsiNote" class="small"></span></div>
+<div class="metric">MACD<b id="macd">--</b><span id="macdNote" class="small"></span></div>
+<div class="metric">Stochastic %K<b id="stoch">--</b><span id="stochNote" class="small"></span></div>
+<div class="metric">Signal<b id="signal">--</b></div>
+<div class="metric">Bollinger Upper<b id="upper">--</b></div>
+<div class="metric">Bollinger Lower<b id="lower">--</b></div>
+<div class="metric">Latest Close<b id="close">--</b></div>
+<div class="metric">Entry Reference<b id="entry">--</b></div>
+<div class="metric">Target Reference<b id="target">--</b></div>
+<div class="metric">Stop Loss Reference<b id="stop">--</b></div>
 </div>
-</main>
+<p class="small">Educational technical indicators only. Signals are not guaranteed trading advice.</p>
+</div>
 
-<footer>AI Trade Pro | Free Dashboard</footer>
+</main>
+<footer class="small" style="text-align:center;padding:20px">
+AI Trade Pro | Free Market Dashboard
+</footer>
 
 <script>
-const stocks = [
- {name:"NIFTY 50",symbol:"^NSEI"},
- {name:"BANK NIFTY",symbol:"^NSEBANK"},
- {name:"SENSEX",symbol:"^BSESN"},
- {name:"RELIANCE NSE",symbol:"RELIANCE.NS"},
- {name:"TCS NSE",symbol:"TCS.NS"},
- {name:"INFOSYS NSE",symbol:"INFY.NS"},
- {name:"HDFC BANK",symbol:"HDFCBANK.NS"},
- {name:"ICICI BANK",symbol:"ICICIBANK.NS"},
- {name:"SBI",symbol:"SBIN.NS"},
- {name:"ITC",symbol:"ITC.NS"},
- {name:"RELIANCE BSE",symbol:"RELIANCE.BO"},
- {name:"TCS BSE",symbol:"TCS.BO"}
+const stocks=[
+ ["NIFTY 50","^NSEI"],
+ ["BANK NIFTY","^NSEBANK"],
+ ["SENSEX","^BSESN"],
+ ["RELIANCE","RELIANCE.NS"],
+ ["TCS","TCS.NS"],
+ ["INFOSYS","INFY.NS"],
+ ["HDFC BANK","HDFCBANK.NS"],
+ ["ICICI BANK","ICICIBANK.NS"],
+ ["SBI","SBIN.NS"],
+ ["ITC","ITC.NS"],
+ ["RELIANCE BSE","RELIANCE.BO"],
+ ["TCS BSE","TCS.BO"]
 ];
 
-const container = document.getElementById("prices");
+let timeframe="daily";
+let cache={};
 
-function showCards(){
- container.innerHTML = stocks.map((s,i)=>`
- <div class="stock">
- <div class="name">${s.name}</div>
- <div class="price" id="price${i}">Loading...</div>
- <div id="change${i}" class="small">Please wait</div>
- <div id="time${i}" class="small"></div>
- </div>`).join("");
+const $=id=>document.getElementById(id);
+
+stocks.forEach(s=>{
+ $("stockSelect").add(new Option(s[0],s[1]));
+});
+
+$("stockSelect").value="RELIANCE.NS";
+
+function proxyUrl(url){
+ return "https://proxy.cors.dev/"+url;
 }
 
-async function getPrice(symbol){
- const url =
- "https://query1.finance.yahoo.com/v8/finance/chart/"
- + encodeURIComponent(symbol)
- + "?range=5d&interval=1d";
+async function getData(symbol){
+ if(cache[symbol] && Date.now()-cache[symbol].time<60000)
+  return cache[symbol].data;
 
- const response = await fetch(
- "https://proxy.cors.dev/" + url,
- {credentials:"omit"}
- );
+ const url="https://query1.finance.yahoo.com/v8/finance/chart/"+
+ encodeURIComponent(symbol)+"?range=2y&interval=1d";
 
- const body = await response.json().catch(()=>null);
+ const res=await fetch(proxyUrl(url),{credentials:"omit"});
+ if(!res.ok) throw Error("Data source unavailable ("+res.status+")");
+ const json=await res.json();
+ const r=json.chart?.result?.[0];
+ if(!r) throw Error("Price data unavailable");
 
- if(!response.ok){
-  throw new Error(
-   response.headers.get("X-Cors-Error") ||
-   body?.chart?.error?.description ||
-   response.status
-  );
+ const q=r.indicators.quote[0];
+ const candles=(r.timestamp||[]).map((t,i)=>({
+  time:t,
+  open:q.open[i],
+  high:q.high[i],
+  low:q.low[i],
+  close:q.close[i],
+  volume:q.volume[i]
+ })).filter(x=>x.close!=null&&x.high!=null&&x.low!=null);
+
+ if(candles.length<35) throw Error("Not enough price history");
+
+ const data={
+  candles,
+  price:r.meta.regularMarketPrice ?? candles.at(-1).close,
+  previous:r.meta.chartPreviousClose,
+  currency:r.meta.currency||"INR"
+ };
+
+ cache[symbol]={time:Date.now(),data};
+ return data;
+}
+
+function ema(values,period){
+ const result=Array(values.length).fill(null);
+ if(values.length<period)return result;
+ const k=2/(period+1);
+ let current=values.slice(0,period).reduce((a,b)=>a+b,0)/period;
+ result[period-1]=current;
+ for(let i=period;i<values.length;i++){
+  current=values[i]*k+current*(1-k);
+  result[i]=current;
+ }
+ return result;
+}
+
+function rsi(values,period=14){
+ const out=Array(values.length).fill(null);
+ if(values.length<=period)return out;
+ let gain=0,loss=0;
+ for(let i=1;i<=period;i++){
+  let d=values[i]-values[i-1];
+  gain+=Math.max(d,0);
+  loss+=Math.max(-d,0);
+ }
+ gain/=period;loss/=period;
+ out[period]=loss===0?100:100-100/(1+gain/loss);
+ for(let i=period+1;i<values.length;i++){
+  let d=values[i]-values[i-1];
+  gain=(gain*(period-1)+Math.max(d,0))/period;
+  loss=(loss*(period-1)+Math.max(-d,0))/period;
+  out[i]=loss===0?100:100-100/(1+gain/loss);
+ }
+ return out;
+}
+
+function calculate(c){
+ const close=c.map(x=>x.close);
+ const rs=rsi(close);
+ const e12=ema(close,12),e26=ema(close,26);
+ const line=close.map((_,i)=>
+  e12[i]!=null&&e26[i]!=null?e12[i]-e26[i]:null);
+ const valid=line.map((x,i)=>x==null?null:i)
+  .filter(x=>x!=null);
+ const macdValues=valid.map(i=>line[i]);
+ const sigValues=ema(macdValues,9);
+ const signal=Array(close.length).fill(null);
+ valid.forEach((idx,j)=>signal[idx]=sigValues[j]);
+
+ const stoch=Array(close.length).fill(null);
+ for(let i=13;i<close.length;i++){
+  const window=c.slice(i-13,i+1);
+  const high=Math.max(...window.map(x=>x.high));
+  const low=Math.min(...window.map(x=>x.low));
+  stoch[i]=high===low?50:
+   100*(close[i]-low)/(high-low);
  }
 
- const result = body?.chart?.result?.[0];
- if(!result) throw new Error("Price unavailable");
-
- const meta = result.meta;
- const price = meta.regularMarketPrice;
- const previous = meta.chartPreviousClose;
-
- if(typeof price !== "number")
-  throw new Error("Price not available");
+ const i=close.length-1;
+ const recent=close.slice(-20);
+ const avg=recent.reduce((a,b)=>a+b,0)/recent.length;
+ const sd=Math.sqrt(recent.reduce((a,b)=>a+(b-avg)**2,0)/recent.length);
 
  return {
-  price,
-  previous,
-  currency:meta.currency || "INR",
-  time:meta.regularMarketTime ||
-       result.timestamp?.at(-1)
+  close:close[i],rsi:rs[i],
+  macd:line[i],macdSignal:signal[i],
+  stoch:stoch[i],
+  upper:avg+2*sd,lower:avg-2*sd
  };
 }
 
+function aggregate(c,frame){
+ if(frame==="daily")return c;
+ const buckets=new Map();
+ c.forEach(x=>{
+  const d=new Date(x.time*1000);
+  let key;
+  if(frame==="weekly"){
+   const day=(d.getUTCDay()+6)%7;
+   const monday=new Date(Date.UTC(
+    d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-day));
+   key=monday.toISOString().slice(0,10);
+  }else{
+   key=d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0");
+  }
+  if(!buckets.has(key)){
+   buckets.set(key,{...x});
+  }else{
+   const b=buckets.get(key);
+   b.high=Math.max(b.high,x.high);
+   b.low=Math.min(b.low,x.low);
+   b.close=x.close;
+   b.volume=(b.volume||0)+(x.volume||0);
+  }
+ });
+ return [...buckets.values()];
+}
+
+function fmt(x){
+ return Number.isFinite(x)?x.toFixed(2):"--";
+}
+
+function setFrame(frame){
+ timeframe=frame;
+ loadAnalysis();
+}
+
 async function loadPrices(){
- document.getElementById("status").textContent =
- "Fetching available market prices...";
+ $("status").textContent="Fetching available prices...";
+ $("prices").innerHTML=stocks.map((s,i)=>`
+ <div class="stock">
+ <div class="name">${s[0]}</div>
+ <div class="price" id="p${i}">Loading...</div>
+ <div class="small" id="c${i}">Please wait</div>
+ </div>`).join("");
 
- showCards();
-
- let success=0;
-
+ let count=0;
  await Promise.all(stocks.map(async(s,i)=>{
-  const priceEl=document.getElementById("price"+i);
-  const changeEl=document.getElementById("change"+i);
-  const timeEl=document.getElementById("time"+i);
-
   try{
-   const q=await getPrice(s.symbol);
-
-   priceEl.textContent = q.price.toLocaleString(
-    "en-IN",
-    {style:"currency",currency:q.currency,
-     maximumFractionDigits:2}
-   );
-
-   if(typeof q.previous==="number" && q.previous!==0){
-    const diff=q.price-q.previous;
-    const pct=diff/q.previous*100;
-
-    changeEl.textContent =
-     (diff>=0?"+":"")+
-     diff.toFixed(2)+" ("+
-     (pct>=0?"+":"")+pct.toFixed(2)+"%)";
-
-    changeEl.className=diff>=0?"up":"down";
-   }else{
-    changeEl.textContent="Previous close unavailable";
+   const d=await getData(s[1]);
+   $("p"+i).textContent=d.price.toLocaleString("en-IN",{
+    style:"currency",currency:d.currency,maximumFractionDigits:2});
+   if(typeof d.previous==="number"){
+    const diff=d.price-d.previous;
+    const pct=diff/d.previous*100;
+    $("c"+i).textContent=(diff>=0?"+":"")+
+      diff.toFixed(2)+" ("+pct.toFixed(2)+"%)";
+    $("c"+i).className=diff>=0?"small up":"small down";
    }
-
-   timeEl.textContent=q.time
-    ? "Data time: "+new Date(q.time*1000)
-       .toLocaleString("en-IN",
-       {timeZone:"Asia/Kolkata"})
-    : "Time unavailable";
-
-   success++;
-
-  }catch(error){
-   priceEl.textContent="Unavailable";
-   priceEl.className="price error";
-   changeEl.textContent=String(error.message);
-   timeEl.textContent="Try again later";
+   count++;
+  }catch(e){
+   $("p"+i).textContent="Unavailable";
+   $("c"+i).textContent=e.message;
   }
  }));
+ $("status").textContent=count+" / "+stocks.length+
+  " prices received. Data may be delayed.";
+}
 
- document.getElementById("status").textContent =
- success+" / "+stocks.length+
- " prices received. Last checked: "+
- new Date().toLocaleTimeString("en-IN");
+async function loadAnalysis(){
+ const symbol=$("stockSelect").value;
+ $("analysisStatus").textContent="Calculating "+timeframe+" indicators...";
+ try{
+  const data=await getData(symbol);
+  const candles=aggregate(data.candles,timeframe);
+  const v=calculate(candles);
+
+  $("rsi").textContent=fmt(v.rsi);
+  $("rsiNote").textContent=v.rsi<30?"Oversold":
+   v.rsi>70?"Overbought":"Neutral zone";
+
+  $("macd").textContent=fmt(v.macd);
+  $("macdNote").textContent=
+   v.macd>v.macdSignal?"MACD above Signal":"MACD below Signal";
+
+  $("stoch").textContent=fmt(v.stoch);
+  $("stochNote").textContent=v.stoch<20?"Oversold":
+   v.stoch>80?"Overbought":"Neutral zone";
+
+  let buy=v.rsi>50&&v.macd>v.macdSignal&&v.stoch>50;
+  let sell=v.rsi<50&&v.macd<v.macdSignal&&v.stoch<50;
+  $("signal").textContent=buy?"BUY SETUP":
+   sell?"SELL SETUP":"WAIT";
+  $("signal").className="signal "+(buy?"up":sell?"down":"");
+
+  $("upper").textContent=fmt(v.upper);
+  $("lower").textContent=fmt(v.lower);
+  $("close").textContent=fmt(v.close);
+  $("entry").textContent=fmt(v.close);
+  $("target").textContent=fmt(v.close*1.03);
+  $("stop").textContent=fmt(v.close*0.98);
+
+  $("analysisStatus").textContent=
+   symbol+" | "+timeframe.toUpperCase()+
+   " | "+candles.length+" candles";
+ }catch(e){
+  $("analysisStatus").textContent="Error: "+e.message;
+ }
 }
 
 loadPrices();
+loadAnalysis();
 </script>
 </body>
 </html>
