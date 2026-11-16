@@ -1,175 +1,55 @@
 
-<!DOCTYPE html>
-<html lang="hi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Trade Pro</title>
-<style>
-body{margin:0;background:#101827;color:#fff;font-family:Arial,sans-serif}
-header{background:#087c59;padding:18px;text-align:center}
-h1{margin:0;font-size:25px}
-.sub{text-align:center;color:#cbd5e1;padding:10px}
-button{background:#0b9b70;color:white;border:0;padding:12px 18px;border-radius:7px;margin:8px}
-#status{text-align:center;color:#fbbf24;padding:10px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;padding:12px}
-.card{background:#1e293b;padding:15px;border-radius:10px}
-.price{font-size:25px;font-weight:bold;color:#4ade80}
-.green{color:#4ade80}.red{color:#fb7185}
-table{width:100%;border-collapse:collapse;margin-top:12px}
-td,th{padding:7px;text-align:left;border-bottom:1px solid #475569;font-size:13px}
-.small{font-size:12px;color:#cbd5e1}
-.signal{font-weight:bold;font-size:17px;margin-top:10px}
-</style>
-</head>
-<body>
-<header>
-<h1>AI TRADE PRO</h1>
-<div>Stock Market Analysis Dashboard</div>
-</header>
-<div class="sub">NSE / BSE | Daily • Weekly • Monthly</div>
-<center><button onclick="loadAll()">Refresh Data</button></center>
-<div id="status">डेटा लोड हो रहा है...</div>
-<div class="grid" id="dashboard"></div>
-<div class="sub small">डेटा Yahoo Finance से लिया जाता है। यह आधिकारिक लाइव NSE/BSE फीड नहीं है।</div>
-
-<script>
-const symbols=[
-["NIFTY 50","^NSEI"],["BANK NIFTY","^NSEBANK"],
-["SENSEX","^BSESN"],["RELIANCE","RELIANCE.NS"],
-["TCS","TCS.NS"],["INFOSYS","INFY.NS"],
-["HDFC BANK","HDFCBANK.NS"],["ICICI BANK","ICICIBANK.NS"],
-["SBI","SBIN.NS"],["ITC","ITC.NS"],
-["TATA MOTORS","TATAMOTORS.NS"],["L&T","LT.NS"],
-["BHARTI AIRTEL","BHARTIARTL.NS"],["AXIS BANK","AXISBANK.NS"],
-["KOTAK BANK","KOTAKBANK.NS"]
-];
-
-const fmt=n=>Number(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
-function average(a){return a.reduce((x,y)=>x+y,0)/a.length}
-function ema(a,p){
- let k=2/(p+1),out=[],v=a[0];
- a.forEach(x=>{v=x*k+v*(1-k);out.push(v)});
- return out;
-}
-function rsi(a,p=14){
- if(a.length<=p)return null;
- let gains=0,losses=0;
- for(let i=1;i<=p;i++){let d=a[i]-a[i-1];if(d>0)gains+=d;else losses-=d}
- let ag=gains/p,al=losses/p;
- for(let i=p+1;i<a.length;i++){
- let d=a[i]-a[i-1];ag=(ag*(p-1)+Math.max(d,0))/p;
- al=(al*(p-1)+Math.max(-d,0))/p;
- }
- return al===0?100:100-(100/(1+ag/al));
-}
-function macd(a){
- if(a.length<35)return null;
- let e12=ema(a,12),e26=ema(a,26);
- let line=a.map((_,i)=>e12[i]-e26[i]);
- let sig=ema(line,9);
- return {line:line.at(-1),signal:sig.at(-1),hist:line.at(-1)-sig.at(-1)};
-}
-function stochastic(a){
- if(a.length<14)return null;
- let x=a.slice(-14),lo=Math.min(...x),hi=Math.max(...x);
- return hi===lo?50:((x.at(-1)-lo)/(hi-lo))*100;
-}
-function bollinger(a){
- if(a.length<20)return null;
- let x=a.slice(-20),m=average(x);
- let sd=Math.sqrt(average(x.map(v=>(v-m)**2)));
- return {mid:m,upper:m+2*sd,lower:m-2*sd};
-}
-function aggregate(a,period){
- let out=[];
- for(let i=0;i<a.length;i+=period){
- let chunk=a.slice(i,i+period);
- if(chunk.length)out.push(chunk.at(-1));
- }
- return out;
-}
-function indicators(a){
- return {
- rsi:rsi(a),macd:macd(a),stoch:stochastic(a),bb:bollinger(a)
- };
-}
-function signal(d){
- let score=0;
- if(d.rsi!==null){if(d.rsi>50)score++;else score--}
- if(d.macd){if(d.macd.hist>0)score++;else score--}
- if(d.stoch!==null){if(d.stoch>50)score++;else score--}
- if(d.bb){if(d.bb.mid && d.price>d.bb.mid)score++;else score--}
- return score>=2?"BUY SETUP":score<=-2?"SELL SETUP":"WAIT";
-}
-function indicatorRows(name,d){
- return `<tr><td>${name}</td><td>${d.rsi===null?"N/A":d.rsi.toFixed(2)}</td>
- <td>${d.macd?d.macd.hist.toFixed(2):"N/A"}</td>
- <td>${d.stoch===null?"N/A":d.stoch.toFixed(2)}</td>
- <td>${d.bb?fmt(d.bb.upper)+" / "+fmt(d.bb.lower):"N/A"}</td></tr>`;
-}
 async function fetchData(symbol){
  const url="https://proxy.cors.dev/https://query1.finance.yahoo.com/v8/finance/chart/"+
  encodeURIComponent(symbol)+"?range=2y&interval=1d";
+
  const response=await fetch(url);
- if(!response.ok)throw Error("डेटा उपलब्ध नहीं");
+ if(!response.ok) throw Error("डेटा उपलब्ध नहीं");
+
  const json=await response.json();
  const result=json.chart.result?.[0];
- if(!result)throw Error("भाव उपलब्ध नहीं");
+ if(!result) throw Error("भाव उपलब्ध नहीं");
+
  const meta=result.meta;
  const raw=result.indicators.quote[0].close;
- const closes=raw.filter(x=>x!==null && Number.isFinite(x));
- if(closes.length<30)throw Error("पर्याप्त डेटा नहीं");
- const price=Number(meta.regularMarketPrice ?? closes.at(-1));
- const prev=Number(meta.chartPreviousClose ?? meta.previousClose);
+
+ // केवल वास्तविक उपलब्ध भाव रखें
+ const valid=raw
+  .map((v,i)=>({price:v,time:result.timestamp?.[i]}))
+  .filter(x=>Number.isFinite(x.price));
+
+ if(valid.length<30) throw Error("पर्याप्त डेटा नहीं");
+
+ // एक ही डेटा स्रोत के लगातार दो ट्रेडिंग सत्र
+ const latest=valid[valid.length-1];
+ const previous=valid[valid.length-2];
+
+ const price=latest.price;
+ const prev=previous.price;
+
  if(!Number.isFinite(price)||!Number.isFinite(prev)||prev===0)
- throw Error("भाव की पुष्टि नहीं हो सकी");
+  throw Error("भाव की पुष्टि नहीं हो सकी");
+
+ const closes=valid.map(x=>x.price);
+
  const daily=indicators(closes);
  const weekly=indicators(aggregate(closes,5));
  const monthly=indicators(aggregate(closes,21));
- daily.price=price;weekly.price=price;monthly.price=price;
- const timestamp=meta.regularMarketTime || result.timestamp?.at(-1);
- return {price,prev,change:price-prev,pct:(price-prev)/prev*100,
- daily,weekly,monthly,time:timestamp?new Date(timestamp*1000).toLocaleString("en-IN"):"उपलब्ध नहीं"};
+
+ daily.price=price;
+ weekly.price=price;
+ monthly.price=price;
+
+ return {
+  price,
+  prev,
+  change:price-prev,
+  pct:((price-prev)/prev)*100,
+  daily,
+  weekly,
+  monthly,
+  time:latest.time
+   ?new Date(latest.time*1000).toLocaleString("en-IN")
+   :"उपलब्ध नहीं"
+ };
 }
-function card(name,data){
- let cls=data.change>=0?"green":"red";
- return `<div class="card">
- <h3>${name}</h3>
- <div class="price">₹ ${fmt(data.price)}</div>
- <div class="${cls}">${data.change>=0?"+":""}${fmt(data.change)} (${data.pct.toFixed(2)}%)</div>
- <div class="small">पिछला बंद: ${fmt(data.prev)}</div>
- <div class="small">डेटा समय: ${data.time}</div>
- <div class="signal">${signal(data.daily)}</div>
- <table>
- <tr><th>समय</th><th>RSI</th><th>MACD Hist.</th><th>Stoch</th><th>BB Upper/Lower</th></tr>
- ${indicatorRows("Daily",data.daily)}
- ${indicatorRows("Weekly",data.weekly)}
- ${indicatorRows("Monthly",data.monthly)}
- </table>
- </div>`;
-}
-async function loadAll(){
- const board=document.getElementById("dashboard");
- const status=document.getElementById("status");
- board.innerHTML="";
- status.textContent="भाव और इंडिकेटर जाँचे जा रहे हैं...";
- let good=0,failed=0;
- for(const [name,symbol] of symbols){
-  try{
-   const data=await fetchData(symbol);
-   board.innerHTML+=card(name,data);
-   good++;
-  }catch(e){
-   failed++;
-   board.innerHTML+=`<div class="card"><h3>${name}</h3>
-   <div class="red">डेटा उपलब्ध नहीं</div><div class="small">${e.message}</div></div>`;
-  }
- }
- status.textContent=`सफल: ${good} | डेटा उपलब्ध नहीं: ${failed} | अंतिम जाँच: ${new Date().toLocaleTimeString("en-IN")}`;
-}
-loadAll();
-setInterval(loadAll,300000);
-</script>
-</body>
-</html>
