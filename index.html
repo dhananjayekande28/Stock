@@ -3,567 +3,211 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Trade Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Trade Pro - Daily BUY Signals</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#101827;color:white;font-family:Arial}
-header{background:#087c59;padding:18px;text-align:center}
-h1{margin:0}
-button{background:#07966c;color:white;border:0;padding:12px 22px;border-radius:8px;font-weight:bold}
-#status{text-align:center;color:#facc15;padding:12px}
-.section{padding:12px}
-.section h2{font-size:19px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-.card{background:#1e293b;padding:14px;border-radius:10px}
-.price{font-size:23px;font-weight:bold;margin:8px 0}
-.green,.buy{color:#4ade80}
-.red,.sell{color:#fb7185}
-.wait{color:#facc15}
-.small{font-size:12px;color:#cbd5e1;margin-top:6px}
-table{width:100%;border-collapse:collapse;background:#1e293b}
-th,td{padding:10px 6px;text-align:center;border-bottom:1px solid #475569;font-size:12px;white-space:nowrap}
-th{background:#273449}
-.tablewrap{overflow-x:auto}
-.signal{font-weight:bold}
-footer{text-align:center;color:#94a3b8;padding:20px;font-size:12px}
+body{margin:0;background:#101827;color:white;font-family:Arial;padding:15px}
+h2{color:#37d67a;text-align:center}
+button{background:#16834b;color:white;border:0;padding:12px 20px;border-radius:7px;font-size:15px}
+.note{color:#bbb;font-size:12px}
+table{width:100%;border-collapse:collapse;margin-top:15px;font-size:13px}
+th,td{padding:10px 6px;border-bottom:1px solid #354052;text-align:center}
+th{background:#263449;color:#70e6a0}
+.buy{color:#35e58a;font-weight:bold}
+.wait{color:#ffc45c}
+.sell{color:#ff6969}
+#status{color:#ffc45c;margin:12px 0}
+.wrap{overflow-x:auto}
 </style>
 </head>
 <body>
-
-<header>
-<h1>AI TRADE PRO</h1>
-<div>Market Analysis Dashboard</div>
-</header>
-
-<div style="text-align:center;padding:14px">
-<button onclick="loadAll()">REFRESH DATA</button>
-</div>
-
-<div id="status">डेटा लोड हो रहा है...</div>
-
-<section class="section">
-<h2>INDEX DATA</h2>
-<div class="grid" id="indices"></div>
-</section>
-
-<section class="section">
-<h2>12 STOCKS - BUY / SELL / WAIT</h2>
-<div class="tablewrap">
+<h2>🚀 AI TRADE PRO</h2>
+<h3>Daily BUY Signal & Entry Price</h3>
+<button onclick="loadStocks()">🔄 Refresh Market Data</button>
+<div id="status">Market data लोड हो रहा है...</div>
+<div class="wrap">
 <table>
 <thead>
 <tr>
-<th>Stock</th>
-<th>Price</th>
-<th>Change</th>
-<th>Daily</th>
-<th>Weekly</th>
-<th>Monthly</th>
+<th>Stock</th><th>Price</th><th>Signal</th>
+<th>Entry</th><th>Target</th><th>Stop Loss</th>
+<th>RSI</th><th>Score</th>
 </tr>
 </thead>
-<tbody id="stockList"></tbody>
+<tbody id="stocks"></tbody>
 </table>
 </div>
-</section>
-
-<section class="section">
-<h2>INDICATOR DETAILS</h2>
-<div class="tablewrap">
-<table>
-<thead>
-<tr>
-<th>Stock</th>
-<th>Period</th>
-<th>RSI</th>
-<th>MACD Histogram</th>
-<th>Stochastic</th>
-<th>BB Upper</th>
-<th>BB Lower</th>
-<th>Signal</th>
-</tr>
-</thead>
-<tbody id="indicatorList"></tbody>
-</table>
-</div>
-</section>
-
-<footer>
-Yahoo Finance Chart API | Delayed data possible<br>
-यह आधिकारिक NSE/BSE लाइव फीड नहीं है।<br>
-BUY/SELL संकेत तकनीकी गणना हैं, गारंटीड ट्रेडिंग सलाह नहीं।
-</footer>
+<p class="note">
+Data source: Yahoo Finance chart data through a public CORS proxy.
+Quotes may be delayed and are not guaranteed live.
+Target and Stop Loss are calculated estimates, not guaranteed prices.
+</p>
 
 <script>
-const indices=[
- ["NIFTY 50","^NSEI"],
- ["BANK NIFTY","^NSEBANK"],
- ["SENSEX","^BSESN"]
+const symbols=[
+["RELIANCE","RELIANCE.NS"],
+["TCS","TCS.NS"],
+["INFOSYS","INFY.NS"],
+["HDFC BANK","HDFCBANK.NS"],
+["ICICI BANK","ICICIBANK.NS"],
+["SBI","SBIN.NS"],
+["ITC","ITC.NS"],
+["TATA MOTORS","TATAMOTORS.NS"],
+["L&T","LT.NS"],
+["BHARTI AIRTEL","BHARTIARTL.NS"],
+["AXIS BANK","AXISBANK.NS"],
+["KOTAK BANK","KOTAKBANK.NS"]
 ];
 
-const stocks=[
- ["RELIANCE","RELIANCE.NS"],
- ["TCS","TCS.NS"],
- ["INFOSYS","INFY.NS"],
- ["HDFC BANK","HDFCBANK.NS"],
- ["ICICI BANK","ICICIBANK.NS"],
- ["SBI","SBIN.NS"],
- ["ITC","ITC.NS"],
- ["TATA MOTORS","TATAMOTORS.NS"],
- ["L&T","LT.NS"],
- ["BHARTI AIRTEL","BHARTIARTL.NS"],
- ["AXIS BANK","AXISBANK.NS"],
- ["KOTAK BANK","KOTAKBANK.NS"]
-];
-
-const $=id=>document.getElementById(id);
-let loading=false;
-
-function fmt(n){
- if(!Number.isFinite(n))return "N/A";
- return n.toLocaleString("en-IN",{
-  minimumFractionDigits:2,
-  maximumFractionDigits:2
- });
-}
-
-function average(a){
- return a.reduce((s,v)=>s+v,0)/a.length;
-}
-
-async function yahooChart(symbol,range,interval){
- const hosts=[
-  "query1.finance.yahoo.com",
-  "query2.finance.yahoo.com"
- ];
-
- let lastError="डेटा उपलब्ध नहीं";
-
- for(const host of hosts){
-  try{
-   const target="https://"+host+
-    "/v8/finance/chart/"+
-    encodeURIComponent(symbol)+
-    "?range="+range+"&interval="+interval;
-
-   const controller=new AbortController();
-   const timer=setTimeout(()=>controller.abort(),15000);
-
-   let response;
-   try{
-    response=await fetch(
-     "https://proxy.cors.dev/"+target,
-     {cache:"no-store",signal:controller.signal}
-    );
-   }finally{
-    clearTimeout(timer);
-   }
-
-   if(!response.ok)
-    throw Error("Server "+response.status);
-
-   const json=await response.json();
-   const result=json.chart?.result?.[0];
-
-   if(!result)
-    throw Error(json.chart?.error?.description||"No chart data");
-
-   return result;
-
-  }catch(e){
-   lastError=e.name==="AbortError"?
-    "समय समाप्त":e.message;
-  }
+function ema(data,period){
+ let k=2/(period+1),out=[];
+ let prev=data[0];
+ out.push(prev);
+ for(let i=1;i<data.length;i++){
+  prev=data[i]*k+prev*(1-k);
+  out.push(prev);
  }
-
- throw Error(lastError);
-}
-
-function getCandles(result){
- const q=result.indicators?.quote?.[0];
-
- if(!q)throw Error("Candles unavailable");
-
- const out=[];
- const closes=q.close||[];
- const highs=q.high||[];
- const lows=q.low||[];
-
- for(let i=0;i<closes.length;i++){
-  const c=closes[i],h=highs[i],l=lows[i];
-
-  if(Number.isFinite(c)&&
-     Number.isFinite(h)&&
-     Number.isFinite(l)){
-   out.push({close:c,high:h,low:l});
-  }
- }
-
- if(out.length<20)
-  throw Error("इतना डेटा उपलब्ध नहीं");
-
  return out;
 }
 
-// RSI - Wilder calculation
-function RSI(a,p=14){
- if(a.length<=p)return null;
-
+function rsi(data,p=14){
  let gains=0,losses=0;
-
  for(let i=1;i<=p;i++){
-  const d=a[i]-a[i-1];
-  if(d>0)gains+=d;
-  else losses-=d;
+  let d=data[i]-data[i-1];
+  if(d>0)gains+=d;else losses-=d;
  }
-
- let avgGain=gains/p;
- let avgLoss=losses/p;
-
- for(let i=p+1;i<a.length;i++){
-  const d=a[i]-a[i-1];
-  avgGain=(avgGain*(p-1)+Math.max(d,0))/p;
-  avgLoss=(avgLoss*(p-1)+Math.max(-d,0))/p;
+ let ag=gains/p,al=losses/p;
+ for(let i=p+1;i<data.length;i++){
+  let d=data[i]-data[i-1];
+  ag=(ag*(p-1)+Math.max(d,0))/p;
+  al=(al*(p-1)+Math.max(-d,0))/p;
  }
-
- if(avgLoss===0)return 100;
- if(avgGain===0)return 0;
-
- return 100-(100/(1+avgGain/avgLoss));
+ if(al===0)return 100;
+ return 100-100/(1+ag/al);
 }
 
-function EMA(a,p){
- if(a.length<p)return [];
+function indicators(candles){
+ const closes=candles.map(x=>x.close);
+ const highs=candles.map(x=>x.high);
+ const lows=candles.map(x=>x.low);
+ const n=closes.length;
+ const last=closes[n-1];
 
- const k=2/(p+1);
- let value=average(a.slice(0,p));
- const out=Array(p-1).fill(null);
+ const r=rsi(closes);
+ const e12=ema(closes,12);
+ const e26=ema(closes,26);
+ const macd=e12.map((v,i)=>v-e26[i]);
+ const signal=ema(macd,9);
+ const macdBuy=macd[n-1]>signal[n-1];
 
- out.push(value);
+ const recentHigh=Math.max(...highs.slice(-14));
+ const recentLow=Math.min(...lows.slice(-14));
+ const stoch=recentHigh===recentLow?50:
+ 100*(last-recentLow)/(recentHigh-recentLow);
 
- for(let i=p;i<a.length;i++){
-  value=a[i]*k+value*(1-k);
-  out.push(value);
+ const avg=closes.slice(-20).reduce((a,b)=>a+b,0)/20;
+ const variance=closes.slice(-20).reduce(
+  (a,b)=>a+Math.pow(b-avg,2),0)/20;
+ const sd=Math.sqrt(variance);
+ const upper=avg+2*sd;
+ const lower=avg-2*sd;
+
+ const tr=[];
+ for(let i=1;i<n;i++){
+  tr.push(Math.max(
+   highs[i]-lows[i],
+   Math.abs(highs[i]-closes[i-1]),
+   Math.abs(lows[i]-closes[i-1])
+  ));
  }
-
- return out;
-}
-
-function MACD(a){
- if(a.length<35)return null;
-
- const fast=EMA(a,12);
- const slow=EMA(a,26);
-
- const line=[];
-
- for(let i=0;i<a.length;i++){
-  if(fast[i]===null||slow[i]===null)
-   line.push(null);
-  else
-   line.push(fast[i]-slow[i]);
- }
-
- const valid=line.filter(Number.isFinite);
- if(valid.length<9)return null;
-
- const signalValues=EMA(valid,9);
- const lastLine=valid[valid.length-1];
- const lastSignal=signalValues.at(-1);
-
- return {
-  line:lastLine,
-  signal:lastSignal,
-  histogram:lastLine-lastSignal
- };
-}
-
-function STOCH(c){
- if(c.length<14)return null;
-
- const x=c.slice(-14);
- const high=Math.max(...x.map(v=>v.high));
- const low=Math.min(...x.map(v=>v.low));
-
- if(high===low)return 50;
-
- return 100*(x.at(-1).close-low)/(high-low);
-}
-
-function BB(a){
- if(a.length<20)return null;
-
- const x=a.slice(-20);
- const mid=average(x);
-
- const sd=Math.sqrt(
-  average(x.map(v=>(v-mid)**2))
- );
-
- return {
-  middle:mid,
-  upper:mid+2*sd,
-  lower:mid-2*sd
- };
-}
-
-function indicators(c){
- const close=c.map(x=>x.close);
-
- return {
-  rsi:RSI(close),
-  macd:MACD(close),
-  stoch:STOCH(c),
-  bb:BB(close),
-  last:close.at(-1)
- };
-}
-
-// Signal calculation
-function getSignal(d){
- if(!d||d.rsi===null||!d.macd||
-    d.stoch===null||!d.bb){
-  return {text:"DATA N/A",type:"wait",score:0};
- }
+ const atr=tr.slice(-14).reduce((a,b)=>a+b,0)/14;
 
  let score=0;
+ if(r>50)score++;
+ if(macdBuy)score++;
+ if(stoch>50)score++;
+ if(last>avg)score++;
 
- if(d.rsi<30)score+=2;
- else if(d.rsi>70)score-=2;
- else if(d.rsi>50)score++;
- else if(d.rsi<50)score--;
+ let action=score>=3?"BUY":score<=1?"SELL":"WAIT";
 
- if(d.macd.histogram>0)score++;
- else if(d.macd.histogram<0)score--;
-
- if(d.stoch<20)score+=2;
- else if(d.stoch>80)score-=2;
- else if(d.stoch>50)score++;
- else if(d.stoch<50)score--;
-
- if(d.last>d.bb.middle)score++;
- else if(d.last<d.bb.middle)score--;
-
- if(score>=3)
-  return {text:"BUY",type:"buy",score};
-
- if(score<=-3)
-  return {text:"SELL",type:"sell",score};
-
- return {text:"WAIT",type:"wait",score};
+ return {last,r,score,action,atr};
 }
 
-// Quote data
-async function getQuote(symbol){
- const r=await yahooChart(symbol,"1d","1m");
- const m=r.meta||{};
+async function getStock(name,symbol){
+ const period=Math.floor(Date.now()/1000);
+ const start=period-60*60*24*365*2;
+ const yahoo=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${period}&interval=1d`;
+ const url="https://corsproxy.io/?url="+encodeURIComponent(yahoo);
 
- const price=m.regularMarketPrice;
- const previous=m.chartPreviousClose||
-                m.previousClose;
+ const response=await fetch(url);
+ if(!response.ok)throw new Error("Data unavailable");
+ const json=await response.json();
+ const result=json.chart.result?.[0];
+ if(!result)throw new Error("No market data");
 
- if(!Number.isFinite(price)||
-    !Number.isFinite(previous)||
-    previous<=0){
-  throw Error("भाव उपलब्ध नहीं");
- }
-
- return {
-  price,
-  previous,
-  change:price-previous,
-  percent:(price-previous)/previous*100,
-  time:m.regularMarketTime?
-   new Date(m.regularMarketTime*1000).toLocaleString("en-IN"):
-   "समय उपलब्ध नहीं",
-  currency:m.currency||"INR"
- };
-}
-
-// Each timeframe loads independently
-async function getPeriod(symbol,range,interval){
- try{
-  const result=await yahooChart(symbol,range,interval);
-  const candles=getCandles(result);
-  const data=indicators(candles);
-
-  if(!data.macd||data.rsi===null||
-     data.stoch===null||!data.bb){
-   throw Error("Indicators के लिए डेटा कम है");
+ const q=result.indicators.quote[0];
+ const candles=[];
+ for(let i=0;i<result.timestamp.length;i++){
+  if(q.close[i]!=null && q.high[i]!=null && q.low[i]!=null){
+   candles.push({
+    close:q.close[i],
+    high:q.high[i],
+    low:q.low[i]
+   });
   }
-
-  return {data,error:null};
-
- }catch(e){
-  return {data:null,error:e.message};
  }
+ if(candles.length<50)throw new Error("Insufficient data");
+
+ return indicators(candles);
 }
 
-async function getAnalysis(symbol){
- const results=await Promise.allSettled([
-  getQuote(symbol),
-  getPeriod(symbol,"2y","1d"),
-  getPeriod(symbol,"5y","1wk"),
-  getPeriod(symbol,"10y","1mo")
- ]);
+async function loadStocks(){
+ const table=document.getElementById("stocks");
+ const status=document.getElementById("status");
+ table.innerHTML="";
+ status.innerText="Market data लोड हो रहा है...";
 
- return {
-  quote:results[0].status==="fulfilled"?
-   results[0].value:null,
+ let buys=0,errors=0;
 
-  quoteError:results[0].status==="rejected"?
-   results[0].reason.message:null,
-
-  daily:results[1].status==="fulfilled"?
-   results[1].value.data:null,
-
-  dailyError:results[1].status==="fulfilled"?
-   results[1].value.error:results[1].reason.message,
-
-  weekly:results[2].status==="fulfilled"?
-   results[2].value.data:null,
-
-  weeklyError:results[2].status==="fulfilled"?
-   results[2].value.error:results[2].reason.message,
-
-  monthly:results[3].status==="fulfilled"?
-   results[3].value.data:null,
-
-  monthlyError:results[3].status==="fulfilled"?
-   results[3].value.error:results[3].reason.message
- };
-}
-
-function signalHTML(d){
- const s=getSignal(d);
- return `<span class="signal ${s.type}">
- ${s.text}<br><small>Score: ${s.score}</small>
- </span>`;
-}
-
-function indexCard(name,q){
- const cls=q.change>=0?"green":"red";
- const sign=q.change>=0?"+":"";
-
- return `
- <div class="card">
-  <h3>${name}</h3>
-  <div class="price">₹ ${fmt(q.price)}</div>
-  <div class="${cls}">
-   ${sign}${fmt(q.change)}
-   (${sign}${q.percent.toFixed(2)}%)
-  </div>
-  <div class="small">Previous Close: ${fmt(q.previous)}</div>
-  <div class="small">Quote Time: ${q.time}</div>
- </div>`;
-}
-
-function indicatorRow(name,period,d,error){
- if(!d){
-  return `<tr>
-   <td>${name}</td>
-   <td>${period}</td>
-   <td colspan="6" class="red">${error||"DATA N/A"}</td>
-  </tr>`;
- }
-
- const s=getSignal(d);
-
- return `
- <tr>
-  <td>${name}</td>
-  <td>${period}</td>
-  <td>${d.rsi.toFixed(2)}</td>
-  <td>${d.macd.histogram.toFixed(3)}</td>
-  <td>${d.stoch.toFixed(2)}</td>
-  <td>${fmt(d.bb.upper)}</td>
-  <td>${fmt(d.bb.lower)}</td>
-  <td class="${s.type}">${s.text} (${s.score})</td>
- </tr>`;
-}
-
-function stockRow(name,a){
- const q=a.quote;
-
- const price=q?
-  "₹ "+fmt(q.price):
-  `<span class="red">N/A</span>`;
-
- const cls=q?(q.change>=0?"green":"red"):"red";
- const sign=q&&q.change>=0?"+":"";
-
- const change=q?
-  `${sign}${fmt(q.change)} (${sign}${q.percent.toFixed(2)}%)`:
-  "भाव उपलब्ध नहीं";
-
- return `
- <tr>
-  <td>${name}</td>
-  <td>${price}</td>
-  <td class="${cls}">${change}</td>
-  <td>${signalHTML(a.daily)}</td>
-  <td>${signalHTML(a.weekly)}</td>
-  <td>${signalHTML(a.monthly)}</td>
- </tr>`;
-}
-
-async function loadAll(){
- if(loading)return;
- loading=true;
-
- $("indices").innerHTML="";
- $("stockList").innerHTML="";
- $("indicatorList").innerHTML="";
-
- const status=$("status");
- let success=0,failed=0;
-
- status.textContent="Market data लोड हो रहा है...";
-
- // Indices
- for(const [name,symbol] of indices){
+ const results=await Promise.all(symbols.map(async item=>{
   try{
-   const q=await getQuote(symbol);
-   $("indices").innerHTML+=indexCard(name,q);
+   return {name:item[0],data:await getStock(item[0],item[1])};
   }catch(e){
-   $("indices").innerHTML+=`
-    <div class="card">
-     <h3>${name}</h3>
-     <span class="red">डेटा उपलब्ध नहीं: ${e.message}</span>
-    </div>`;
+   errors++;
+   return {name:item[0],error:true};
   }
- }
+ }));
 
- // Stocks
- for(let i=0;i<stocks.length;i++){
-  const [name,symbol]=stocks[i];
+ results.forEach(item=>{
+  if(item.error)return;
+  const d=item.data;
+  if(d.action==="BUY")buys++;
 
-  status.textContent=
-   `12 शेयरों की जाँच: ${i+1}/12`;
+  let entry=d.last;
+  let target=entry+2*d.atr;
+  let stop=entry-d.atr;
 
-  const a=await getAnalysis(symbol);
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td>${item.name}</td>
+   <td>₹${d.last.toFixed(2)}</td>
+   <td class="${d.action.toLowerCase()}">${d.action}</td>
+   <td>${d.action==="BUY"?"₹"+entry.toFixed(2):"-"}</td>
+   <td>${d.action==="BUY"?"₹"+target.toFixed(2):"-"}</td>
+   <td>${d.action==="BUY"?"₹"+stop.toFixed(2):"-"}</td>
+   <td>${d.r.toFixed(1)}</td>
+   <td>${d.score}/4</td>
+  `;
+  table.appendChild(tr);
+ });
 
-  $("stockList").innerHTML+=stockRow(name,a);
-
-  $("indicatorList").innerHTML+=
-   indicatorRow(name,"Daily",a.daily,a.dailyError)+
-   indicatorRow(name,"Weekly",a.weekly,a.weeklyError)+
-   indicatorRow(name,"Monthly",a.monthly,a.monthlyError);
-
-  if(a.quote||a.daily||a.weekly||a.monthly)
-   success++;
-  else
-   failed++;
- }
-
- status.textContent=
-  `सफल शेयर: ${success} | पूरी तरह असफल: ${failed} | अपडेट: ${new Date().toLocaleTimeString("en-IN")}`;
-
- loading=false;
+ status.innerText=
+ "Daily BUY Stocks: "+buys+
+ " | Data Errors: "+errors+
+ " | Updated: "+new Date().toLocaleTimeString("en-IN");
 }
 
-loadAll();
-setInterval(loadAll,60000);
+loadStocks();
 </script>
-
 </body>
 </html>
