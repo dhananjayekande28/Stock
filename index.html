@@ -3,6 +3,267 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Trade Pro</title>
+<style>
+body{background:#101827;color:white;font-family:Arial;padding:14px}
+h2{color:#39df89;text-align:center}
+button{background:#16834b;color:white;border:0;padding:12px;border-radius:7px}
+.panel{background:#1c293b;padding:12px;border-radius:8px;margin:12px 0}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12px}
+td,th{padding:10px 7px;border-bottom:1px solid #39465a;text-align:center}
+th{background:#26374c;color:#72e6a4}
+.buy{color:#36e68c;font-weight:bold}
+.wait{color:#ffca66}
+.error{color:#ff7777}
+.small{font-size:12px;color:#b8c4d3}
+</style>
+</head>
+<body>
+<h2>🚀 AI TRADE PRO</h2>
+<div class="panel">
+ <b>DAILY BUY SIGNAL SCANNER</b>
+ <p id="status">Market data लोड हो रहा है...</p>
+ <button onclick="start()">Refresh Market</button>
+ <p class="small">NSE Top 50 by turnover | Daily EOD data</p>
+</div>
+<div class="panel">
+ <b id="count">BUY Stocks: 0</b>
+ <p class="small">केवल BUY Signal वाले शेयर नीचे दिखेंगे।</p>
+</div>
+<div class="wrap">
+<table>
+<thead>
+<tr>
+<th>Stock</th><th>Price</th><th>Signal</th>
+<th>Entry</th><th>Target</th><th>Stop Loss</th>
+<th>RSI</th><th>Score</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+<p class="small">
+Data: TejHQ / NSE Bhavcopy.
+Daily data is generally available the next morning.
+Target and Stop Loss are estimates, not guaranteed prices.
+</p>
+<script>
+const API="https://api.tejhq.dev/v1";
+const $=id=>document.getElementById(id);
+
+function dateString(d){
+ return d.toISOString().slice(0,10);
+}
+
+async function getJSON(url){
+ const r=await fetch(url);
+ if(!r.ok)throw Error("HTTP "+r.status);
+ const j=await r.json();
+ if(j.error)throw Error(j.error);
+ return j;
+}
+
+async function getSnapshot(){
+ let d=new Date();
+ for(let i=0;i<8;i++){
+  const day=dateString(d);
+  try{
+   const j=await getJSON(
+    `${API}/snapshot/nse?date=${day}`
+   );
+   if(j.data && j.data.length>100){
+    return {date:day,data:j.data};
+   }
+  }catch(e){}
+  d.setUTCDate(d.getUTCDate()-1);
+ }
+ throw Error("NSE snapshot उपलब्ध नहीं");
+}
+
+function ema(a,p){
+ let k=2/(p+1),out=[a[0]];
+ for(let i=1;i<a.length;i++)
+  out.push(a[i]*k+out[i-1]*(1-k));
+ return out;
+}
+
+function calculate(data){
+ const c=data.map(x=>Number(x.close));
+ const h=data.map(x=>Number(x.high));
+ const l=data.map(x=>Number(x.low));
+ const n=c.length;
+ if(n<35)throw Error("कम डेटा");
+
+ let gain=0,loss=0;
+ for(let i=1;i<=14;i++){
+  let d=c[i]-c[i-1];
+  if(d>0)gain+=d;else loss-=d;
+ }
+ let ag=gain/14,al=loss/14;
+ for(let i=15;i<n;i++){
+  let d=c[i]-c[i-1];
+  ag=(ag*13+Math.max(0,d))/14;
+  al=(al*13+Math.max(0,-d))/14;
+ }
+ const rsi=al===0?100:100-100/(1+ag/al);
+
+ const e12=ema(c,12);
+ const e26=ema(c,26);
+ const m=e12.map((v,i)=>v-e26[i]);
+ const sig=ema(m,9);
+ const macd=m[n-1]>sig[n-1];
+
+ const hh=Math.max(...h.slice(-14));
+ const ll=Math.min(...l.slice(-14));
+ const stoch=hh===ll?50:100*(c[n-1]-ll)/(hh-ll);
+
+ const recent=c.slice(-20);
+ const avg=recent.reduce((a,b)=>a+b,0)/20;
+ const sd=Math.sqrt(recent.reduce(
+  (a,b)=>a+(b-avg)**2,0)/20);
+ const upper=avg+2*sd;
+ const lower=avg-2*sd;
+ const bb=c[n-1]>avg;
+
+ let trs=[];
+ for(let i=1;i<n;i++){
+  trs.push(Math.max(
+   h[i]-l[i],
+   Math.abs(h[i]-c[i-1]),
+   Math.abs(l[i]-c[i-1])
+  ));
+ }
+ const atr=trs.slice(-14).reduce((a,b)=>a+b,0)/14;
+
+ let score=0;
+ if(rsi>50)score++;
+ if(macd)score++;
+ if(stoch>50)score++;
+ if(bb)score++;
+
+ return {
+  price:c[n-1],rsi,score,atr,
+  signal:score>=3?"BUY":score<=1?"SELL":"WAIT"
+ };
+}
+
+async function getHistory(symbol){
+ const end=new Date();
+ const start=new Date();
+ start.setUTCDate(start.getUTCDate()-400);
+ const url=`${API}/ohlcv/nse/${encodeURIComponent(symbol)}?from=${dateString(start)}&to=${dateString(end)}`;
+ const j=await getJSON(url);
+ if(!j.data || j.data.length<35)
+  throw Error("History unavailable");
+ return j.data.sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+async function pool(items,limit,fn){
+ let next=0;
+ const out=[];
+ async function worker(){
+  while(next<items.length){
+   const i=next++;
+   try{out[i]=await fn(items[i]);}
+   catch(e){out[i]={error:e.message,item:items[i]};}
+  }
+ }
+ await Promise.all(Array.from(
+  {length:limit},worker
+ ));
+ return out;
+}
+
+async function start(){
+ $("rows").innerHTML="";
+ $("status").innerText="NSE Market Snapshot प्राप्त हो रहा है...";
+ $("count").innerText="BUY Stocks: 0";
+
+ try{
+  const snap=await getSnapshot();
+
+  const valid=snap.data.filter(x=>
+   x.series==="EQ" &&
+   x.symbol &&
+   Number(x.close)>0 &&
+   Number(x.turnover)>0
+  );
+
+  valid.sort((a,b)=>
+   Number(b.turnover)-Number(a.turnover)
+  );
+
+  const selected=valid.slice(0,50);
+
+  $("status").innerText=
+   "Top 50 का Daily Analysis: "+snap.date;
+
+  const results=await pool(selected,5,async stock=>{
+   const history=await getHistory(stock.symbol);
+   const d=calculate(history);
+   return {symbol:stock.symbol,...d};
+  });
+
+  const buys=results.filter(x=>
+   !x.error && x.signal==="BUY"
+  );
+
+  buys.sort((a,b)=>b.score-a.score);
+
+  buys.forEach(x=>{
+   const entry=x.price;
+   const target=entry+2*x.atr;
+   const stop=entry-x.atr;
+   const tr=document.createElement("tr");
+   [
+    x.symbol,
+    "₹"+entry.toFixed(2),
+    "BUY",
+    "₹"+entry.toFixed(2),
+    "₹"+target.toFixed(2),
+    "₹"+stop.toFixed(2),
+    x.rsi.toFixed(1),
+    x.score+"/4"
+   ].forEach((v,i)=>{
+    const td=document.createElement("td");
+    td.textContent=v;
+    if(i===2)td.className="buy";
+    tr.appendChild(td);
+   });
+   $("rows").appendChild(tr);
+  });
+
+  const errors=results.filter(x=>x.error).length;
+  $("count").innerText=
+   "BUY Stocks: "+buys.length;
+
+  $("status").innerText=
+   "Analysis complete | Date: "+snap.date+
+   " | Checked: "+results.length+
+   " | Errors: "+errors+
+   " | BUY: "+buys.length;
+
+  if(!buys.length){
+   $("rows").innerHTML=
+    '<tr><td colspan="8">आज कोई BUY Signal नहीं मिला।</td></tr>';
+  }
+
+ }catch(e){
+  $("status").innerText="DATA ERROR: "+e.message;
+ }
+}
+
+start();
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Trade Pro - Daily BUY Signals</title>
 <style>
