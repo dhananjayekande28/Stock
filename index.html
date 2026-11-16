@@ -5,141 +5,102 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Trade Pro</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#0b1220;color:#fff;font-family:Arial,sans-serif}
-header{background:#14233a;padding:18px;text-align:center;border-bottom:2px solid #00d6a0}
-h1{color:#00e6a8;margin:0}
-header p{color:#aab8ce}
-.container{padding:14px;max-width:850px;margin:auto}
-.card{background:#18263b;border:1px solid #30415b;border-radius:12px;padding:16px;margin-bottom:14px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.value{font-size:25px;font-weight:bold;color:#00e6a8;margin-top:8px}
-.small{color:#9eacc2;font-size:13px}
-select,button{padding:12px;border-radius:8px;border:0;font-size:15px}
-select{background:#263951;color:white;width:100%}
-button{background:#00c995;color:#071b19;font-weight:bold;cursor:pointer}
-.signal{font-size:24px;color:#ffd166;font-weight:bold}
-canvas{width:100%!important;height:250px!important}
-footer{text-align:center;color:#8c9bb0;padding:20px;font-size:12px}
-@media(max-width:400px){.grid{grid-template-columns:1fr}}
+body {
+  margin:0;
+  background:#101827;
+  color:white;
+  font-family:Arial,sans-serif;
+}
+header {
+  background:#172b46;
+  padding:20px;
+  text-align:center;
+}
+h1 {color:#00e5a0;margin:0;}
+.subtitle {color:#b8c7d9;margin-top:8px;}
+.section {padding:15px;}
+.panel {
+  background:#1c2c43;
+  padding:15px;
+  border-radius:12px;
+  margin:12px 0;
+}
+h2 {color:#00e5a0;font-size:18px;}
+iframe {width:100%;border:0;}
+.footer {text-align:center;color:#aaa;padding:20px;}
 </style>
 </head>
 <body>
 
 <header>
 <h1>AI TRADE PRO</h1>
-<p>Smart Technical Analysis Dashboard</p>
+<div class="subtitle">NSE + BSE Market Dashboard</div>
 </header>
 
-<div class="container">
+<div class="section">
 
-<div class="card">
-<h3>Select Stock</h3>
-<select id="stock">
-<option>NIFTY 50</option>
-<option>BANK NIFTY</option>
-<option>RELIANCE</option>
-<option>HDFC BANK</option>
-<option>ICICI BANK</option>
-<option>TCS</option>
-<option>INFOSYS</option>
-<option>SBIN</option>
-</select>
-<p class="small">Market data: Demo mode – live API not connected</p>
-</div>
-
-<div class="grid">
-<div class="card">
-<div class="small">Market Price</div>
-<div class="value" id="price">--</div>
-</div>
-<div class="card">
-<div class="small">Market Trend</div>
-<div class="value">WAIT</div>
-</div>
-<div class="card">
-<div class="small">RSI (14)</div>
-<div class="value">--</div>
-</div>
-<div class="card">
-<div class="small">MACD</div>
-<div class="value">--</div>
-</div>
-<div class="card">
-<div class="small">Stochastic</div>
-<div class="value">--</div>
-</div>
-<div class="card">
-<div class="small">Bollinger Band</div>
-<div class="value">--</div>
+<div class="panel">
+<h2>Live Share Prices</h2>
+<div class="tradingview-widget-container">
+<div class="tradingview-widget-container__widget"></div>
+<script type="text/javascript"
+src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
+async>
+{
+"symbols": [
+{"proName":"NSE:NIFTY","title":"NIFTY 50"},
+{"proName":"NSE:BANKNIFTY","title":"BANK NIFTY"},
+{"proName":"NSE:RELIANCE","title":"RELIANCE"},
+{"proName":"NSE:TCS","title":"TCS"},
+{"proName":"NSE:INFY","title":"INFOSYS"},
+{"proName":"BSE:500325","title":"RELIANCE BSE"}
+],
+"showSymbolLogo":true,
+"isTransparent":true,
+"displayMode":"adaptive",
+"colorTheme":"dark",
+"locale":"en"
+}
+</script>
 </div>
 </div>
 
-<div class="card">
-<h3>Trading Signal</h3>
-<div class="signal">WAIT</div>
-<p>Buy / Sell analysis will appear after live market data integration.</p>
-</div>
-
-<div class="card">
-<h3>Stock Chart</h3>
-<canvas id="chart"></canvas>
-<p class="small">Illustrative demo chart – not live market data.</p>
-</div>
-
-<div class="card">
-<h3>Timeframe Analysis</h3>
-<div class="grid">
-<div>Daily <div class="value">--</div></div>
-<div>Weekly <div class="value">--</div></div>
-<div>Monthly <div class="value">--</div></div>
-<div>Yearly <div class="value">--</div></div>
-</div>
-</div>
-
-<div class="card">
-<h3>Risk Management</h3>
-<p>Entry Price: --</p>
-<p>Target: --</p>
-<p>Stop Loss: --</p>
-<p class="small">Signals are unavailable until verified market data is connected.</p>
-</div>
-
-</div>
-
-<footer>
-AI Trade Pro | Technical Analysis Demo<br>
-Trading involves market risk. Verify data before investing.
-</footer>
-
+<div class="panel">
+<h2>NIFTY 50 Chart</h2>
+<div class="tradingview-widget-container">
+<div id="chart"></div>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-const ctx=document.getElementById('chart');
-new Chart(ctx,{
-type:'line',
-data:{
-labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-datasets:[{
-label:'Demo Price',
-data:[100,104,102,108,106,112,115],
-borderColor:'#00e6a8',
-backgroundColor:'rgba(0,230,168,.10)',
-fill:true,
-tension:.3
-}]
-},
-options:{
-responsive:true,
-maintainAspectRatio:false,
-plugins:{legend:{labels:{color:'white'}}},
-scales:{
-x:{ticks:{color:'#aab8ce'}},
-y:{ticks:{color:'#aab8ce'}}
-}
-}
+new TradingView.widget({
+"width":"100%",
+"height":400,
+"symbol":"NSE:NIFTY",
+"interval":"D",
+"timezone":"Asia/Kolkata",
+"theme":"dark",
+"style":"1",
+"locale":"en",
+"enable_publishing":false,
+"allow_symbol_change":true,
+"container_id":"chart"
 });
 </script>
+</div>
+</div>
+
+<div class="panel">
+<h2>Market Status</h2>
+<p>NSE / BSE Market Data</p>
+<p>Market timings: 9:15 AM - 3:30 PM</p>
+<p>Data availability depends on exchange permissions.</p>
+</div>
+
+</div>
+
+<div class="footer">
+AI Trade Pro | Market Analysis Dashboard
+</div>
 
 </body>
 </html>
