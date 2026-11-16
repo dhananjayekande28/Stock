@@ -3,6 +3,179 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Trade Pro - Daily Scanner</title>
+<style>
+body{font-family:Arial;background:#f2f5f9;margin:0;padding:14px;color:#172033}
+header{background:#123c68;color:white;padding:18px;border-radius:12px;text-align:center}
+button{background:#087b45;color:white;border:0;padding:12px 18px;border-radius:8px;font-size:16px;margin:12px 0}
+.note{font-size:13px;color:#555}
+#status{padding:10px;background:white;border-radius:8px;margin:10px 0}
+.card{background:white;padding:13px;margin:10px 0;border-radius:10px;box-shadow:0 2px 6px #ddd}
+.buy{color:#078342;font-weight:bold}.wait{color:#b77900;font-weight:bold}
+.sell{color:#c62828;font-weight:bold}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#eaf0f7}
+</style>
+</head>
+<body>
+<header>
+<h2>AI TRADE PRO</h2>
+<div>Daily Stock Buy Signal Scanner</div>
+</header>
+
+<button onclick="scanStocks()">🔄 आज का डेटा और सिग्नल देखें</button>
+<div id="status">डेटा लोड करने के लिए बटन दबाएँ।</div>
+<div class="note">डेटा स्रोत: Yahoo Finance. डेटा उपलब्ध न होने पर त्रुटि दिखाई जाएगी।</div>
+<div id="results"></div>
+
+<script>
+const stocks=[
+"RELIANCE","HDFCBANK","ICICIBANK","SBIN","INFY",
+"TCS","ITC","LT","AXISBANK","TATAMOTORS",
+"BHARTIARTL","MARUTI","TATASTEEL","ONGC","NTPC",
+"POWERGRID","SUNPHARMA","WIPRO","HINDUNILVR","BAJFINANCE",
+"ADANIENT","COALINDIA","BEL","TRENT","HAL",
+"TECHM","M&M","ULTRACEMCO","JSWSTEEL","TITAN"
+];
+
+function average(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+
+function ema(values,period){
+ let k=2/(period+1),out=[];
+ let e=values[0];out.push(e);
+ for(let i=1;i<values.length;i++){
+  e=values[i]*k+e*(1-k);out.push(e);
+ }
+ return out;
+}
+
+function rsi(values,period=14){
+ let gains=0,losses=0;
+ for(let i=values.length-period;i<values.length;i++){
+  let d=values[i]-values[i-1];
+  if(d>0)gains+=d;else losses-=d;
+ }
+ if(losses===0)return 100;
+ return 100-(100/(1+gains/losses));
+}
+
+function indicators(candles){
+ const close=candles.map(x=>x.close);
+ const high=candles.map(x=>x.high);
+ const low=candles.map(x=>x.low);
+ const last=close.length-1;
+ const price=close[last];
+
+ const RSI=rsi(close);
+ const fast=ema(close,12),slow=ema(close,26);
+ const macd=fast.map((v,i)=>v-slow[i]);
+ const signal=ema(macd,9);
+ const MACD=macd[last],SIG=signal[last];
+
+ const recentHigh=Math.max(...high.slice(-14));
+ const recentLow=Math.min(...low.slice(-14));
+ const K=recentHigh===recentLow?50:
+ 100*(price-recentLow)/(recentHigh-recentLow);
+ const D=average(
+  [0,1,2].map(i=>{
+   const j=last-i;
+   const hh=Math.max(...high.slice(j-13,j+1));
+   const ll=Math.min(...low.slice(j-13,j+1));
+   return hh===ll?50:100*(close[j]-ll)/(hh-ll);
+  })
+ );
+
+ const sma20=average(close.slice(-20));
+ const buy=RSI>=50 && RSI<=70 &&
+ MACD>SIG && price>sma20 && K>D;
+
+ return {price,RSI,MACD,SIG,K,D,sma20,buy};
+}
+
+async function getStock(symbol){
+ const url="https://query1.finance.yahoo.com/v8/finance/chart/"+
+ symbol+".NS?range=3mo&interval=1d";
+ const proxy="https://corsproxy.io/?url="+encodeURIComponent(url);
+ const response=await fetch(proxy);
+ if(!response.ok)throw new Error("HTTP "+response.status);
+ const json=await response.json();
+ const result=json.chart.result?.[0];
+ if(!result)throw new Error("डेटा उपलब्ध नहीं");
+ const q=result.indicators.quote[0];
+ const candles=[];
+ for(let i=0;i<q.close.length;i++){
+  if(q.close[i]!=null && q.high[i]!=null && q.low[i]!=null){
+   candles.push({
+    close:q.close[i],high:q.high[i],low:q.low[i]
+   });
+  }
+ }
+ if(candles.length<35)throw new Error("पर्याप्त डेटा नहीं");
+ return indicators(candles);
+}
+
+function money(n){
+ return "₹"+Number(n).toFixed(2);
+}
+
+async function scanStocks(){
+ const status=document.getElementById("status");
+ const results=document.getElementById("results");
+ results.innerHTML="";
+ status.innerHTML="डेटा प्राप्त हो रहा है... कृपया प्रतीक्षा करें।";
+
+ let success=0,errors=0,buyCount=0;
+ let output=[];
+
+ for(const symbol of stocks){
+  status.innerHTML="स्कैन हो रहा है: "+symbol+
+   " | सफल: "+success+" | त्रुटि: "+errors;
+  try{
+   const d=await getStock(symbol);
+   success++;
+   const entry=d.price;
+   const target=entry*1.03;
+   const stop=entry*0.985;
+   const signal=d.buy?"BUY":"WAIT";
+   if(d.buy)buyCount++;
+
+   output.push(`
+   <div class="card">
+    <h3>${symbol} <span class="${d.buy?'buy':'wait'}">${signal}</span></h3>
+    <table>
+    <tr><th>जानकारी</th><th>भाव / वैल्यू</th></tr>
+    <tr><td>Entry Price</td><td>${money(entry)}</td></tr>
+    <tr><td>Target Price (+3%)</td><td>${money(target)}</td></tr>
+    <tr><td>Stop Loss (-1.5%)</td><td>${money(stop)}</td></tr>
+    <tr><td>RSI (14)</td><td>${d.RSI.toFixed(2)}</td></tr>
+    <tr><td>MACD</td><td>${d.MACD.toFixed(3)}</td></tr>
+    <tr><td>MACD Signal</td><td>${d.SIG.toFixed(3)}</td></tr>
+    <tr><td>Stochastic K / D</td><td>${d.K.toFixed(2)} / ${d.D.toFixed(2)}</td></tr>
+    <tr><td>SMA 20</td><td>${money(d.sma20)}</td></tr>
+    </table>
+   </div>`);
+  }catch(e){
+   errors++;
+   output.push(`<div class="card">
+   <b>${symbol}</b> — <span class="sell">डेटा त्रुटि</span>
+   <div class="note">${e.message}</div>
+   </div>`);
+  }
+  results.innerHTML=output.join("");
+ }
+
+ status.innerHTML=`स्कैन पूरा हुआ। सफल: ${success} | त्रुटि: ${errors} | BUY संकेत: ${buyCount}`;
+}
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Trade Pro</title>
 <style>
