@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Trade Pro</title>
 <style>
 body {
@@ -17,50 +17,72 @@ header {
   padding:20px;
   text-align:center;
 }
-h1 {color:#00e5a0;margin:0;}
-.subtitle {color:#b8c7d9;margin-top:8px;}
-.section {padding:15px;}
+h1 {color:#00e5a0;margin:0}
+main {padding:12px}
 .panel {
   background:#1c2c43;
-  padding:15px;
+  padding:14px;
+  margin-bottom:15px;
   border-radius:12px;
-  margin:12px 0;
 }
-h2 {color:#00e5a0;font-size:18px;}
-iframe {width:100%;border:0;}
-.footer {text-align:center;color:#aaa;padding:20px;}
+h2 {color:#00e5a0;font-size:18px}
+.widget {
+  width:100%;
+  min-height:500px;
+}
+.widget iframe {max-width:100%}
+footer {
+  text-align:center;
+  padding:20px;
+  color:#aaa;
+}
 </style>
 </head>
 <body>
 
 <header>
 <h1>AI TRADE PRO</h1>
-<div class="subtitle">NSE + BSE Market Dashboard</div>
+<p>NSE + BSE Stock Dashboard</p>
 </header>
 
-<div class="section">
+<main>
 
 <div class="panel">
-<h2>Live Share Prices</h2>
-<div class="tradingview-widget-container">
+<h2>Live / Available Market Quotes</h2>
+<div class="tradingview-widget-container widget">
 <div class="tradingview-widget-container__widget"></div>
 <script type="text/javascript"
-src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
+src="https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js"
 async>
 {
-"symbols": [
-{"proName":"NSE:NIFTY","title":"NIFTY 50"},
-{"proName":"NSE:BANKNIFTY","title":"BANK NIFTY"},
-{"proName":"NSE:RELIANCE","title":"RELIANCE"},
-{"proName":"NSE:TCS","title":"TCS"},
-{"proName":"NSE:INFY","title":"INFOSYS"},
-{"proName":"BSE:500325","title":"RELIANCE BSE"}
-],
-"showSymbolLogo":true,
-"isTransparent":true,
-"displayMode":"adaptive",
-"colorTheme":"dark",
-"locale":"en"
+  "width":"100%",
+  "height":"500",
+  "symbolsGroups":[
+    {
+      "name":"NSE Stocks",
+      "symbols":[
+        {"name":"NSE:RELIANCE","displayName":"Reliance"},
+        {"name":"NSE:TCS","displayName":"TCS"},
+        {"name":"NSE:INFY","displayName":"Infosys"},
+        {"name":"NSE:HDFCBANK","displayName":"HDFC Bank"},
+        {"name":"NSE:ICICIBANK","displayName":"ICICI Bank"},
+        {"name":"NSE:SBIN","displayName":"SBI"},
+        {"name":"NSE:ITC","displayName":"ITC"}
+      ]
+    },
+    {
+      "name":"Indices",
+      "symbols":[
+        {"name":"NSE:NIFTY","displayName":"Nifty 50"},
+        {"name":"NSE:BANKNIFTY","displayName":"Bank Nifty"},
+        {"name":"BSE:SENSEX","displayName":"Sensex"}
+      ]
+    }
+  ],
+  "showSymbolLogo":true,
+  "isTransparent":false,
+  "colorTheme":"dark",
+  "locale":"en"
 }
 </script>
 </div>
@@ -69,38 +91,32 @@ async>
 <div class="panel">
 <h2>NIFTY 50 Chart</h2>
 <div class="tradingview-widget-container">
-<div id="chart"></div>
-<script src="https://s3.tradingview.com/tv.js"></script>
-<script>
-new TradingView.widget({
-"width":"100%",
-"height":400,
-"symbol":"NSE:NIFTY",
-"interval":"D",
-"timezone":"Asia/Kolkata",
-"theme":"dark",
-"style":"1",
-"locale":"en",
-"enable_publishing":false,
-"allow_symbol_change":true,
-"container_id":"chart"
-});
+<div class="tradingview-widget-container__widget"></div>
+<script type="text/javascript"
+src="https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js"
+async>
+{
+  "symbols":[["NIFTY 50","NSE:NIFTY|1D"]],
+  "chartOnly":false,
+  "width":"100%",
+  "height":400,
+  "locale":"en",
+  "colorTheme":"dark",
+  "isTransparent":false,
+  "showVolume":true,
+  "showMA":true,
+  "hideDateRanges":false,
+  "autosize":true
+}
 </script>
 </div>
 </div>
 
-<div class="panel">
-<h2>Market Status</h2>
-<p>NSE / BSE Market Data</p>
-<p>Market timings: 9:15 AM - 3:30 PM</p>
-<p>Data availability depends on exchange permissions.</p>
-</div>
+</main>
 
-</div>
-
-<div class="footer">
-AI Trade Pro | Market Analysis Dashboard
-</div>
+<footer>
+AI Trade Pro | Free Market Dashboard
+</footer>
 
 </body>
 </html>
