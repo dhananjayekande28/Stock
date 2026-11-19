@@ -369,3 +369,374 @@ async function scan(type){
 </script>
 </body>
 </html>
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Trade Pro</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:#101827;color:white;font-family:Arial}
+header{background:#183b60;padding:16px;border-radius:12px;text-align:center}
+h2{color:#39df89;margin:5px}
+.tabs{display:flex;gap:8px;margin:15px 0}
+.tabs button{flex:1;padding:13px 5px;background:#26374c;color:white;border:0;border-radius:8px}
+.tabs button.active{background:#078449}
+button{cursor:pointer}
+.panel{background:#1c293b;padding:13px;border-radius:9px;margin:12px 0}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:850px;font-size:12px}
+th,td{padding:10px 7px;border-bottom:1px solid #39465a;text-align:center;white-space:nowrap}
+th{background:#26374c;color:#72e6a4}
+.buy{color:#39e68c;font-weight:bold}
+.wait{color:#ffca66}
+.sell,.error{color:#ff7777}
+.small{font-size:12px;color:#b8c4d3}
+.status{color:#ffca66;margin:10px 0;font-size:13px}
+.section{display:none}
+.section.active{display:block}
+.refresh{background:#16834b;color:white;border:0;padding:12px;border-radius:7px}
+</style>
+</head>
+<body>
+
+<header>
+<h2>🚀 AI TRADE PRO</h2>
+<div>Daily Scanner + Weekly AI Report</div>
+</header>
+
+<div class="tabs">
+<button class="active" onclick="showTab('daily',this)">DAILY SCANNER</button>
+<button onclick="showTab('weekly',this)">WEEKLY AI REPORT</button>
+</div>
+
+<section id="daily" class="section active">
+<div class="panel">
+<b>DAILY BUY SIGNAL SCANNER</b>
+<p id="dailyStatus" class="status">Refresh दबाएं।</p>
+<button class="refresh" onclick="scan('daily')">🔄 Refresh Daily</button>
+<p id="dailyCount" class="small">BUY Stocks: 0</p>
+</div>
+<div class="wrap">
+<table>
+<thead><tr>
+<th>Stock</th><th>Price</th><th>Signal</th>
+<th>Entry</th><th>Target</th><th>Stop Loss</th>
+<th>RSI</th><th>MACD</th><th>Score</th>
+</tr></thead>
+<tbody id="dailyRows"></tbody>
+</table>
+</div>
+</section>
+
+<section id="weekly" class="section">
+<div class="panel">
+<b>WEEKLY AI REPORT</b>
+<p id="weeklyStatus" class="status">Refresh दबाएं।</p>
+<button class="refresh" onclick="scan('weekly')">🔄 Refresh Weekly Report</button>
+<p id="weeklyCount" class="small">Weekly BUY Stocks: 0</p>
+</div>
+<div class="wrap">
+<table>
+<thead><tr>
+<th>Stock</th><th>Last Week Price</th>
+<th>Current Price</th><th>Change ₹</th><th>Change %</th>
+<th>Weekly RSI</th><th>MACD</th><th>Signal</th>
+<th>Entry</th><th>Target</th><th>Stop Loss</th>
+<th>Expected Days</th><th>Target Status</th>
+</tr></thead>
+<tbody id="weeklyRows"></tbody>
+</table>
+</div>
+<p class="small">
+Expected Days अनुमानित ट्रेडिंग दिन हैं, गारंटी नहीं।
+Target Status अगले स्कैन पर नए भाव के आधार पर अपडेट होगा।
+</p>
+</section>
+
+<p class="small">
+Data source: Yahoo Finance through CORS proxy.
+Prices may be delayed. Educational analysis only.
+</p>
+
+<script>
+const stocks=[
+"RELIANCE","HDFCBANK","ICICIBANK","SBIN","INFY",
+"TCS","ITC","LT","AXISBANK","TATAMOTORS",
+"BHARTIARTL","MARUTI","TATASTEEL","ONGC","NTPC",
+"POWERGRID","SUNPHARMA","WIPRO","HINDUNILVR",
+"BAJFINANCE","ADANIENT","COALINDIA","BEL",
+"TRENT","HAL","TECHM","M&M","ULTRACEMCO",
+"JSWSTEEL","TITAN"
+];
+
+function showTab(id,btn){
+ document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+ document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ btn.classList.add('active');
+}
+
+function ema(a,p){
+ let k=2/(p+1),out=[a[0]];
+ for(let i=1;i<a.length;i++)
+  out.push(a[i]*k+out[i-1]*(1-k));
+ return out;
+}
+
+function rsi(a,p=14){
+ let gain=0,loss=0;
+ for(let i=1;i<=p;i++){
+  let d=a[i]-a[i-1];
+  gain+=Math.max(d,0);
+  loss+=Math.max(-d,0);
+ }
+ let ag=gain/p,al=loss/p;
+ for(let i=p+1;i<a.length;i++){
+  let d=a[i]-a[i-1];
+  ag=(ag*(p-1)+Math.max(d,0))/p;
+  al=(al*(p-1)+Math.max(-d,0))/p;
+ }
+ return al===0?100:100-100/(1+ag/al);
+}
+
+function analyse(candles){
+ const c=candles.map(x=>x.close);
+ const h=candles.map(x=>x.high);
+ const l=candles.map(x=>x.low);
+ const n=c.length;
+
+ if(n<35)throw Error("पर्याप्त ऐतिहासिक डेटा नहीं मिला");
+
+ const R=rsi(c);
+ const e12=ema(c,12);
+ const e26=ema(c,26);
+ const m=e12.map((v,i)=>v-e26[i]);
+ const sig=ema(m,9);
+
+ const hh=Math.max(...h.slice(-14));
+ const ll=Math.min(...l.slice(-14));
+ const K=hh===ll?50:100*(c[n-1]-ll)/(hh-ll);
+
+ const avg=c.slice(-20).reduce((a,b)=>a+b,0)/20;
+
+ const trs=[];
+ for(let i=1;i<n;i++){
+  trs.push(Math.max(
+   h[i]-l[i],
+   Math.abs(h[i]-c[i-1]),
+   Math.abs(l[i]-c[i-1])
+  ));
+ }
+ const atr=trs.slice(-14).reduce((a,b)=>a+b,0)/14;
+
+ let score=0;
+ if(R>50 && R<70)score++;
+ if(m[n-1]>sig[n-1])score++;
+ if(K>50)score++;
+ if(c[n-1]>avg)score++;
+
+ return {
+  price:c[n-1],
+  rsi:R,
+  macd:m[n-1],
+  signalLine:sig[n-1],
+  atr:atr,
+  score:score,
+  action:score>=3?"BUY":score<=1?"SELL":"WAIT"
+ };
+}
+
+/* नया डेटा फेच सिस्टम: पहले cors.dev, फिर AllOrigins */
+async function fetchWithTimeout(url){
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),18000);
+ try{
+  const response=await fetch(url,{
+   signal:controller.signal,
+   cache:"no-store"
+  });
+  if(!response.ok)throw Error("HTTP "+response.status);
+  return response;
+ }finally{
+  clearTimeout(timer);
+ }
+}
+
+async function getYahooJSON(yahooURL){
+ const proxies=[
+  "https://proxy.cors.dev/"+yahooURL,
+  "https://api.allorigins.win/raw?url="+encodeURIComponent(yahooURL)
+ ];
+
+ let lastError="Proxy connection failed";
+
+ for(const proxyURL of proxies){
+  try{
+   const response=await fetchWithTimeout(proxyURL);
+   const json=await response.json();
+
+   if(json.contents){
+    const wrapped=JSON.parse(json.contents);
+    return wrapped;
+   }
+   if(json.chart)return json;
+
+   throw Error(json.message||"Invalid Yahoo response");
+  }catch(e){
+   lastError=e.name==="AbortError"?"Request timeout":e.message;
+  }
+ }
+ throw Error(lastError);
+}
+
+async function getData(symbol,interval){
+ const range=interval==="1wk"?"2y":"1y";
+ const yahooURL=
+ "https://query1.finance.yahoo.com/v8/finance/chart/"+
+ encodeURIComponent(symbol+".NS")+
+ "?range="+range+"&interval="+interval;
+
+ const json=await getYahooJSON(yahooURL);
+ const result=json.chart?.result?.[0];
+
+ if(!result){
+  const msg=json.chart?.error?.description;
+  throw Error(msg||"Yahoo data unavailable");
+ }
+
+ const q=result.indicators?.quote?.[0];
+ if(!q||!result.timestamp)throw Error("Price data missing");
+
+ const candles=[];
+
+ for(let i=0;i<result.timestamp.length;i++){
+  if(q.close?.[i]!=null && q.high?.[i]!=null && q.low?.[i]!=null){
+   candles.push({
+    date:result.timestamp[i],
+    close:Number(q.close[i]),
+    high:Number(q.high[i]),
+    low:Number(q.low[i])
+   });
+  }
+ }
+ if(candles.length<35)throw Error("Historical data कम है");
+ return candles;
+}
+
+function money(n){
+ return "₹"+Number(n).toFixed(2);
+}
+
+function cell(row,value,cls){
+ const td=document.createElement("td");
+ td.textContent=value;
+ if(cls)td.className=cls;
+ row.appendChild(td);
+}
+
+function errorRow(rows,symbol,error,weekly){
+ const row=document.createElement("tr");
+ cell(row,symbol);
+ const td=document.createElement("td");
+ td.textContent="ERROR: "+error;
+ td.className="error";
+ td.colSpan=weekly?12:8;
+ row.appendChild(td);
+ rows.appendChild(row);
+}
+
+async function scan(type){
+ const weekly=type==="weekly";
+ const rows=document.getElementById(weekly?"weeklyRows":"dailyRows");
+ const status=document.getElementById(weekly?"weeklyStatus":"dailyStatus");
+ const count=document.getElementById(weekly?"weeklyCount":"dailyCount");
+
+ rows.innerHTML="";
+ status.textContent="Market data प्राप्त हो रहा है...";
+ count.textContent="स्कैन शुरू...";
+
+ let buys=0,errors=0,success=0;
+
+ for(let i=0;i<stocks.length;i++){
+  const symbol=stocks[i];
+  status.textContent="Scanning "+symbol+
+   " ("+(i+1)+"/"+stocks.length+")";
+
+  try{
+   const candles=await getData(symbol,weekly?"1wk":"1d");
+   const d=analyse(candles);
+   success++;
+
+   const entry=d.price;
+   const target=entry+2*d.atr;
+   const stop=entry-d.atr;
+
+   const row=document.createElement("tr");
+
+   if(!weekly){
+    if(d.action==="BUY")buys++;
+
+    cell(row,symbol);
+    cell(row,money(d.price));
+    cell(row,d.action,d.action.toLowerCase());
+    cell(row,d.action==="BUY"?money(entry):"-");
+    cell(row,d.action==="BUY"?money(target):"-");
+    cell(row,d.action==="BUY"?money(stop):"-");
+    cell(row,d.rsi.toFixed(2));
+    cell(row,d.macd.toFixed(3));
+    cell(row,d.score+"/4");
+   }else{
+    if(d.action==="BUY")buys++;
+
+    const previous=candles[candles.length-2].close;
+    const change=d.price-previous;
+    const percent=change/previous*100;
+
+    const dailyCandles=await getData(symbol,"1d");
+    const dailyData=analyse(dailyCandles);
+    const dailyATR=dailyData.atr;
+
+    const days=Math.max(2,Math.min(15,
+      Math.ceil((target-entry)/Math.max(dailyATR*0.6,0.01))
+    ));
+
+    const targetStatus=d.price>=target?"TARGET HIT":"PENDING";
+
+    cell(row,symbol);
+    cell(row,money(previous));
+    cell(row,money(d.price));
+    cell(row,(change>=0?"+":"")+money(change));
+    cell(row,(percent>=0?"+":"")+percent.toFixed(2)+"%");
+    cell(row,d.rsi.toFixed(2));
+    cell(row,d.macd>d.signalLine?"BULLISH":"BEARISH");
+    cell(row,d.action,d.action.toLowerCase());
+    cell(row,d.action==="BUY"?money(entry):"-");
+    cell(row,d.action==="BUY"?money(target):"-");
+    cell(row,d.action==="BUY"?money(stop):"-");
+    cell(row,d.action==="BUY"?days+" Days":"-");
+    cell(row,d.action==="BUY"?targetStatus:"-");
+   }
+
+   rows.appendChild(row);
+
+  }catch(e){
+   errors++;
+   errorRow(rows,symbol,e.message||"Unknown error",weekly);
+  }
+ }
+
+ status.textContent=
+ "Completed | Successful: "+success+
+ " | Errors: "+errors+
+ " | Updated: "+new Date().toLocaleString("en-IN");
+
+ count.textContent=(weekly?"Weekly":"Daily")+
+ " BUY Stocks: "+buys;
+}
+
+</script>
+</body>
+</html>
