@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -43,7 +44,7 @@ th{background:#26374c;color:#72e6a4}
 <section id="daily" class="section active">
 <div class="panel">
 <b>DAILY BUY SIGNAL SCANNER</b>
-<p id="dailyStatus" class="status">डेटा लोड करने के लिए Refresh दबाएं।</p>
+<p id="dailyStatus" class="status">Refresh दबाएं।</p>
 <button class="refresh" onclick="scan('daily')">🔄 Refresh Daily</button>
 <p id="dailyCount" class="small">BUY Stocks: 0</p>
 </div>
@@ -62,26 +63,18 @@ th{background:#26374c;color:#72e6a4}
 <section id="weekly" class="section">
 <div class="panel">
 <b>WEEKLY AI REPORT</b>
-<p id="weeklyStatus" class="status">Weekly data लोड करने के लिए बटन दबाएं।</p>
+<p id="weeklyStatus" class="status">Refresh दबाएं।</p>
 <button class="refresh" onclick="scan('weekly')">🔄 Refresh Weekly Report</button>
 <p id="weeklyCount" class="small">Weekly BUY Stocks: 0</p>
 </div>
 <div class="wrap">
 <table>
 <thead><tr>
-<th>Stock</th>
-<th>Last Week Price</th>
-<th>Current Price</th>
-<th>Change ₹</th>
-<th>Change %</th>
-<th>Weekly RSI</th>
-<th>MACD</th>
-<th>Signal</th>
-<th>Entry</th>
-<th>Target</th>
-<th>Stop Loss</th>
-<th>Expected Days</th>
-<th>Target Status</th>
+<th>Stock</th><th>Last Week Price</th>
+<th>Current Price</th><th>Change ₹</th><th>Change %</th>
+<th>Weekly RSI</th><th>MACD</th><th>Signal</th>
+<th>Entry</th><th>Target</th><th>Stop Loss</th>
+<th>Expected Days</th><th>Target Status</th>
 </tr></thead>
 <tbody id="weeklyRows"></tbody>
 </table>
@@ -93,8 +86,8 @@ Target Status अगले स्कैन पर नए भाव के आध
 </section>
 
 <p class="small">
-Data source: Yahoo Finance via CORS proxy.
-Market prices may be delayed. Educational analysis only.
+Data source: Yahoo Finance through CORS proxy.
+Prices may be delayed. Educational analysis only.
 </p>
 
 <script>
@@ -144,7 +137,7 @@ function analyse(candles){
  const l=candles.map(x=>x.low);
  const n=c.length;
 
- if(n<35)throw Error("Insufficient data");
+ if(n<35)throw Error("पर्याप्त ऐतिहासिक डेटा नहीं मिला");
 
  const R=rsi(c);
  const e12=ema(c,12);
@@ -157,8 +150,6 @@ function analyse(candles){
  const K=hh===ll?50:100*(c[n-1]-ll)/(hh-ll);
 
  const avg=c.slice(-20).reduce((a,b)=>a+b,0)/20;
- const sd=Math.sqrt(c.slice(-20).reduce(
-  (a,b)=>a+(b-avg)**2,0)/20);
 
  const trs=[];
  for(let i=1;i<n;i++){
@@ -187,26 +178,71 @@ function analyse(candles){
  };
 }
 
+/* नया डेटा फेच सिस्टम: पहले cors.dev, फिर AllOrigins */
+async function fetchWithTimeout(url){
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),18000);
+ try{
+  const response=await fetch(url,{
+   signal:controller.signal,
+   cache:"no-store"
+  });
+  if(!response.ok)throw Error("HTTP "+response.status);
+  return response;
+ }finally{
+  clearTimeout(timer);
+ }
+}
+
+async function getYahooJSON(yahooURL){
+ const proxies=[
+  "https://proxy.cors.dev/"+yahooURL,
+  "https://api.allorigins.win/raw?url="+encodeURIComponent(yahooURL)
+ ];
+
+ let lastError="Proxy connection failed";
+
+ for(const proxyURL of proxies){
+  try{
+   const response=await fetchWithTimeout(proxyURL);
+   const json=await response.json();
+
+   if(json.contents){
+    const wrapped=JSON.parse(json.contents);
+    return wrapped;
+   }
+   if(json.chart)return json;
+
+   throw Error(json.message||"Invalid Yahoo response");
+  }catch(e){
+   lastError=e.name==="AbortError"?"Request timeout":e.message;
+  }
+ }
+ throw Error(lastError);
+}
+
 async function getData(symbol,interval){
  const range=interval==="1wk"?"2y":"1y";
- const url=
+ const yahooURL=
  "https://query1.finance.yahoo.com/v8/finance/chart/"+
- symbol+".NS?range="+range+"&interval="+interval;
+ encodeURIComponent(symbol+".NS")+
+ "?range="+range+"&interval="+interval;
 
- const proxy="https://corsproxy.io/?url="+encodeURIComponent(url);
- const response=await fetch(proxy);
-
- if(!response.ok)throw Error("HTTP "+response.status);
-
- const json=await response.json();
+ const json=await getYahooJSON(yahooURL);
  const result=json.chart?.result?.[0];
- if(!result)throw Error("Data unavailable");
 
- const q=result.indicators.quote[0];
+ if(!result){
+  const msg=json.chart?.error?.description;
+  throw Error(msg||"Yahoo data unavailable");
+ }
+
+ const q=result.indicators?.quote?.[0];
+ if(!q||!result.timestamp)throw Error("Price data missing");
+
  const candles=[];
 
  for(let i=0;i<result.timestamp.length;i++){
-  if(q.close[i]!=null && q.high[i]!=null && q.low[i]!=null){
+  if(q.close?.[i]!=null && q.high?.[i]!=null && q.low?.[i]!=null){
    candles.push({
     date:result.timestamp[i],
     close:Number(q.close[i]),
@@ -215,11 +251,12 @@ async function getData(symbol,interval){
    });
   }
  }
+ if(candles.length<35)throw Error("Historical data कम है");
  return candles;
 }
 
 function money(n){
- return "₹"+n.toFixed(2);
+ return "₹"+Number(n).toFixed(2);
 }
 
 function cell(row,value,cls){
@@ -227,6 +264,17 @@ function cell(row,value,cls){
  td.textContent=value;
  if(cls)td.className=cls;
  row.appendChild(td);
+}
+
+function errorRow(rows,symbol,error,weekly){
+ const row=document.createElement("tr");
+ cell(row,symbol);
+ const td=document.createElement("td");
+ td.textContent="ERROR: "+error;
+ td.className="error";
+ td.colSpan=weekly?12:8;
+ row.appendChild(td);
+ rows.appendChild(row);
 }
 
 async function scan(type){
@@ -276,10 +324,10 @@ async function scan(type){
     const change=d.price-previous;
     const percent=change/previous*100;
 
-    // अनुमानित दिन: दैनिक ATR के आधार पर
     const dailyCandles=await getData(symbol,"1d");
     const dailyData=analyse(dailyCandles);
     const dailyATR=dailyData.atr;
+
     const days=Math.max(2,Math.min(15,
       Math.ceil((target-entry)/Math.max(dailyATR*0.6,0.01))
     ));
@@ -305,10 +353,7 @@ async function scan(type){
 
   }catch(e){
    errors++;
-   const row=document.createElement("tr");
-   cell(row,symbol);
-   cell(row,"DATA ERROR","error");
-   rows.appendChild(row);
+   errorRow(rows,symbol,e.message||"Unknown error",weekly);
   }
  }
 
